@@ -4,118 +4,84 @@
 # tbgen also is in public domain
 
 BEGIN {
-	Opterr = 1    # default is to diagnose
-	Optind = 1    # skip ARGV[0]
+	# variables settable by -v
+	if (!tbname)    tbname = "testbench"
+	if (!vcdfile)   vcdfile = "testbench.vcd"
+	if (!timescale) timescale = 1
+	if (!duration)  duration = 100
+	if (!step)      step = 1
+	if (!module)    module = ""
 
-	tbname = "testbench"
-	vcdfile = "testbench.vcd"
+	# internal variables
+	nsteps = duration / step
 
-	timescale = 1
-	duration = 100
-	step = 1
-	module = ""
-
-	ninput = 0
-	noutput = 0
-
-	# test program
-	while ((ch = getopt(ARGC, ARGV, "d:m:s:t:")) != -1) {
-		if (ch == "d")
-			duration = Optarg
-		else if (ch == "m")
-			module = Optarg
-		else if (ch == "s")
-			step = Optarg
-		else if (ch == "t")
-			timescale = Optarg
-		else
-			usage()
+	for (i = 1; i < ARGC; i++) {
+		if (split(ARGV[i], a, ":") != 3) {
+			print "tbgen: improper input: " ARGV[i] >"/dev/stderr"
+			error = 1
+			exit 1
+		}
+		inputs[a[1]] = sprintf("%s;%s", a[2], (a[3]) ? a[3] : "1")
 	}
 	ARGC = 0
 
-	nsteps = duration / step
-
 	srand()
-}
-
-function usage() {
-	print "usage: tbgen -- [-d duration] [-m module] [-t timescale] [-s step] " >"/dev/stderr"
-	error = 1
-	exit 1
-}
-
-function getopt(argc, argv, options, optl, thisopt, i) {
-	optl = length(options)
-
-	if (optl == 0) # no options given
-		return -1
-	if (argv[Optind] == "--") {  # all done
-		Optind++
-		_opti = 0
-		return -1
-	} else if (argv[Optind] !~ /^-[^: \t\n\f\r\v\b]/) {
-		_opti = 0
-		return -1
-	}
-	if (_opti == 0)
-		_opti = 2
-	thisopt = substr(argv[Optind], _opti, 1)
-	Optopt = thisopt
-	i = index(options, thisopt)
-	if (i == 0) {
-		if (Opterr)
-			printf("%c -- invalid option\n", thisopt) > "/dev/stderr"
-		if (_opti >= length(argv[Optind])) {
-			Optind++
-			_opti = 0
-		} else
-			_opti++
-		return "?"
-	}
-	if (substr(options, i + 1, 1) == ":") {
-		# get option argument
-		if (length(substr(argv[Optind], _opti + 1)) > 0)
-			Optarg = substr(argv[Optind], _opti + 1)
-		else
-			Optarg = argv[++Optind]
-		_opti = 0
-	} else
-		Optarg = ""
-	if (_opti == 0 || _opti >= length(argv[Optind])) {
-		Optind++
-		_opti = 0
-	} else
-		_opti++
-
-	return thisopt
 }
 
 function abs(n) {
 	return n < 0 ? -n : n;
 }
 
-function randombits(n, size, len, i) {
-	len = split(inputsizes[n], a, "[]:[]")
+function getsizelen(sizestring, len, a) {
+	len = split(sizestring, a, "[]:[]")
 
 	if (len == 3) {
-		size = a[2]
+		return a[2]
 	} else if (len == 4) {
-		size = abs(a[2] - a[3] + 1)
-	} else {
-		print ":" inputsizes[n] ":" >"/dev/stderr"
-		print ":" len ":" >"/dev/stderr"
-		print "tbgen: could not compute size of signal bus" >"/dev/stderr"
-		error = 1
-		exit 1
+		return abs(a[2] - a[3] + 1)
 	}
+	print "tbgen: could not compute size of signal bus: " sizestring >"/dev/stderr"
+	error = 1
+	exit 1
+}
 
-	printf "%s'b", size
-	for (i = 0; i < size; i++) {
+function randombits(n, i) {
+	printf "%s'b", n
+	for (i = 0; i < n; i++) {
 		if (rand() < 0.5)
 			printf "0"
 		else
 			printf "1"
 	}
+}
+
+function increasing(n, i) {
+	if (reset) {
+		Incmax = 1
+		for (i = 0; i < n; i++)
+			Incmax *= 2
+		Incval = 0
+		reset = 0
+	}
+
+	printf "%s'h%x", n, Incval
+	Incval = (Incval + 1) % Incmax
+}
+
+function decreasing(n, i) {
+	if (reset) {
+		Incmax = 1
+		for (i = 0; i < n; i++)
+			Incmax *= 2
+		Incval = Incmax - 1
+		reset = 0
+	}
+
+	printf "%s'h%x", n, Incval
+	if (!Incval)
+		Incval = Incmax - 1
+	else
+		Incval = (Incval - 1) % Incmax
 }
 
 function header() {
@@ -124,22 +90,33 @@ function header() {
 	print "module " tbname "();"
 }
 
-function signals(i) {
-	for (i = 0; i < ninput; i++)
-		print "	reg " inputsizes[i] " " inputnames[i] ";"
-	for (i = 0; i < noutput; i++)
-		print "	wire " outputsizes[i] " " outputnames[i] ";"
+function signals(input, a) {
+	for (i in inputs) {
+		split(inputs[i], a, ";")
+		printf "\treg %s %s;\n", a[2], a[1]
+	}
+	for (i in outputs) {
+		split(outputs[i], a, ";")
+		printf "\twire %s %s;\n", a[2], a[1]
+	}
 	print ""
 }
 
-function uut(i) {
-	printf "\t%s uut(", module
-	for (i = 0; i < ninput; i++) {
-		printf ".%s(%s), ", inputnames[i], inputnames[i]
+function dut(i, a, n) {
+	n = 0
+
+	for (i in inputs) {
+		split(inputs[i], s, ";")
+		a[n++] = s[1]
 	}
-	for (i = 0; i < noutput; i++) {
-		printf ".%s(%s)%s", outputnames[i], outputnames[i], (i == noutput - 1) ? "" : ", "
+	for (i in outputs) {
+		split(outputs[i], s, ";")
+		a[n++] = s[1]
 	}
+
+	printf "\t%s dut(", module
+	for (i = 0; i < n; i++)
+		printf ".%s(%s)%s", a[i], a[i], (i == n - 1) ? "" : ", "
 	printf ");\n\n"
 }
 
@@ -152,20 +129,35 @@ function initial() {
 	printf "\tend\n"
 }
 
-function geninput(n, i) {
+function geninput(input) {
+	reset = 1
+
+	split(input, a, ";")
+
 	printf "\n"
-	printf "\t/* %s */\n", inputnames[n]
+	printf "\t/* %s */\n", a[1]
 	printf "\tinitial\n"
 	printf "\tbegin\n"
 
-	for (i = 0; i < nsteps; i++) {
-		printf "\t\t"
-		if (i) {
-			printf "#%s; ", step
+	if (a[3] == "r" || a[3] == "i" || a[3] == "d") {
+		for (i = 0; i < nsteps / a[4]; i++) {
+			printf "\t\t"
+			if (i) {
+				printf "#%s; ", step * a[4]
+			}
+			printf "%s = ", a[1]
+			sizelen = getsizelen(a[2])
+			if (a[3] == "r")            # generate inputs randomly
+				randombits(sizelen)
+			else if (a[3] == "i")
+				increasing(sizelen)
+			else if (a[3] == "d")
+				decreasing(sizelen)
+
+			printf ";\n"
 		}
-		printf "%s = ", inputnames[n]
-		randombits(n)
-		printf ";\n"
+	} else {
+		printf "\t\t%s = %s;\n", a[1], a[3]
 	}
 
 	printf "\tend\n"
@@ -183,37 +175,38 @@ function footer() {
 }
 
 /input/ {
-	sub(".*input +(wire|reg)? +", "", $0)   # remove keywords from $0
+	sub(".*input +(wire|reg)? *", "", $0)   # remove keywords from $0
 	while (sub("[,\(\);]", "", $0))         # remove separators from $0
 		;
 
 	n = split($0, a)
-	size = ""
-
+	sizestring = ""
 	for (i = 1; i <= n; i++) {
 		if (match("\[[^:]*:?[^\]]*\]", a[i]))
-			size = a[i++]
-		inputnames[ninput] = a[i]
-		inputsizes[ninput] = size
-		ninput++
+			sizestring = a[i++]
+		if (inputs[a[i]])
+			inputs[a[i]] = sprintf("%s;%s;%s", a[i], sizestring, inputs[a[i]])
+		else
+			inputs[a[i]] = sprintf("%s;%s;%s;%s", a[i], sizestring, "r", 1)
 	}
 }
 
 /output/ {
-	sub(".*output +(wire|reg)? +", "", $0)   # remove keywords from $0
+	sub(".*output +(wire|reg)? *", "", $0)   # remove keywords from $0
 	while (sub("[,\(\);]", "", $0))         # remove separators from $0
 		;
 
 	n = split($0, a)
-	size = ""
-
+	sizestring = ""
 	for (i = 1; i <= n; i++) {
 		if (match("\[[^:]*:?[^\]]*\]", a[i]))
-			size = a[i++]
-		outputnames[noutput] = a[i]
-		outputsizes[noutput] = size
-		noutput++
+			sizestring = a[i++]
+		outputs[a[i]] = sprintf("%s;%s", a[i], sizestring)
 	}
+}
+
+/endmodule/ {
+	exit
 }
 
 END {
@@ -222,11 +215,10 @@ END {
 
 	header()
 	signals()
-	uut()
+	dut()
 	initial()
-
-	for (i = 0; i < ninput; i++)
-		geninput(i)
-
+	for (i in inputs) {
+		geninput(inputs[i])
+	}
 	footer()
 }
