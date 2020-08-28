@@ -59,13 +59,6 @@ steps.
 
 	$ ./tbgen A:i:1 B:i:16 <mymodule >testbench.v
 
-## TODO
-
-* Consider the cases when the bus sizes are parameterized.
-* Improve parsing.
-* Add option to generate increasing/decreasing input values.
-* Add option to set input values to a constant.
-
 ## License
 
 This software is in public domain and is provided AS IS, with NO WARRANTY.
