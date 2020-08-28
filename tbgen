@@ -1,0 +1,232 @@
+#!/usr/bin/awk -f
+# tbgen generate testbench from verilog module
+# geopt function in public domain from arnold@gnu.org
+# tbgen also is in public domain
+
+BEGIN {
+	Opterr = 1    # default is to diagnose
+	Optind = 1    # skip ARGV[0]
+
+	tbname = "testbench"
+	vcdfile = "testbench.vcd"
+
+	timescale = 1
+	duration = 100
+	step = 1
+	module = ""
+
+	ninput = 0
+	noutput = 0
+
+	# test program
+	while ((ch = getopt(ARGC, ARGV, "d:m:s:t:")) != -1) {
+		if (ch == "d")
+			duration = Optarg
+		else if (ch == "m")
+			module = Optarg
+		else if (ch == "s")
+			step = Optarg
+		else if (ch == "t")
+			timescale = Optarg
+		else
+			usage()
+	}
+	ARGC = 0
+
+	nsteps = duration / step
+
+	srand()
+}
+
+function usage() {
+	print "usage: tbgen -- [-d duration] [-m module] [-t timescale] [-s step] " >"/dev/stderr"
+	error = 1
+	exit 1
+}
+
+function getopt(argc, argv, options, optl, thisopt, i) {
+	optl = length(options)
+
+	if (optl == 0) # no options given
+		return -1
+	if (argv[Optind] == "--") {  # all done
+		Optind++
+		_opti = 0
+		return -1
+	} else if (argv[Optind] !~ /^-[^: \t\n\f\r\v\b]/) {
+		_opti = 0
+		return -1
+	}
+	if (_opti == 0)
+		_opti = 2
+	thisopt = substr(argv[Optind], _opti, 1)
+	Optopt = thisopt
+	i = index(options, thisopt)
+	if (i == 0) {
+		if (Opterr)
+			printf("%c -- invalid option\n", thisopt) > "/dev/stderr"
+		if (_opti >= length(argv[Optind])) {
+			Optind++
+			_opti = 0
+		} else
+			_opti++
+		return "?"
+	}
+	if (substr(options, i + 1, 1) == ":") {
+		# get option argument
+		if (length(substr(argv[Optind], _opti + 1)) > 0)
+			Optarg = substr(argv[Optind], _opti + 1)
+		else
+			Optarg = argv[++Optind]
+		_opti = 0
+	} else
+		Optarg = ""
+	if (_opti == 0 || _opti >= length(argv[Optind])) {
+		Optind++
+		_opti = 0
+	} else
+		_opti++
+
+	return thisopt
+}
+
+function abs(n) {
+	return n < 0 ? -n : n;
+}
+
+function randombits(n, size, len, i) {
+	len = split(inputsizes[n], a, "[]:[]")
+
+	if (len == 3) {
+		size = a[2]
+	} else if (len == 4) {
+		size = abs(a[2] - a[3] + 1)
+	} else {
+		print ":" inputsizes[n] ":" >"/dev/stderr"
+		print ":" len ":" >"/dev/stderr"
+		print "tbgen: could not compute size of signal bus" >"/dev/stderr"
+		error = 1
+		exit 1
+	}
+
+	printf "%s'b", size
+	for (i = 0; i < size; i++) {
+		if (rand() < 0.5)
+			printf "0"
+		else
+			printf "1"
+	}
+}
+
+function header() {
+	print "`timescale " timescale " ns / " timescale " ns"
+	print ""
+	print "module " tbname "();"
+}
+
+function signals(i) {
+	for (i = 0; i < ninput; i++)
+		print "	reg " inputsizes[i] " " inputnames[i] ";"
+	for (i = 0; i < noutput; i++)
+		print "	wire " outputsizes[i] " " outputnames[i] ";"
+	print ""
+}
+
+function uut(i) {
+	printf "\t%s uut(", module
+	for (i = 0; i < ninput; i++) {
+		printf ".%s(%s), ", inputnames[i], inputnames[i]
+	}
+	for (i = 0; i < noutput; i++) {
+		printf ".%s(%s)%s", outputnames[i], outputnames[i], (i == noutput - 1) ? "" : ", "
+	}
+	printf ");\n\n"
+}
+
+function initial() {
+	printf "\tinitial\n"
+	printf "\tbegin\n"
+	printf "\t\t$dumpfile(\"%s\");\n", vcdfile
+	printf "\t\t$dumpvars(0, %s);\n", tbname
+	printf "\t\t#%s $stop;\n", duration
+	printf "\tend\n"
+}
+
+function geninput(n, i) {
+	printf "\n"
+	printf "\t/* %s */\n", inputnames[n]
+	printf "\tinitial\n"
+	printf "\tbegin\n"
+
+	for (i = 0; i < nsteps; i++) {
+		printf "\t\t"
+		if (i) {
+			printf "#%s; ", step
+		}
+		printf "%s = ", inputnames[n]
+		randombits(n)
+		printf ";\n"
+	}
+
+	printf "\tend\n"
+}
+
+function footer() {
+	print "endmodule"
+}
+
+/^module/ {
+	if (module == "") {
+		split($0, a, "[ (]")
+		module = a[2]
+	}
+}
+
+/input/ {
+	sub(".*input +(wire|reg)? +", "", $0)   # remove keywords from $0
+	while (sub("[,\(\);]", "", $0))         # remove separators from $0
+		;
+
+	n = split($0, a)
+	size = ""
+
+	for (i = 1; i <= n; i++) {
+		if (match("\[[^:]*:?[^\]]*\]", a[i]))
+			size = a[i++]
+		inputnames[ninput] = a[i]
+		inputsizes[ninput] = size
+		ninput++
+	}
+}
+
+/output/ {
+	sub(".*output +(wire|reg)? +", "", $0)   # remove keywords from $0
+	while (sub("[,\(\);]", "", $0))         # remove separators from $0
+		;
+
+	n = split($0, a)
+	size = ""
+
+	for (i = 1; i <= n; i++) {
+		if (match("\[[^:]*:?[^\]]*\]", a[i]))
+			size = a[i++]
+		outputnames[noutput] = a[i]
+		outputsizes[noutput] = size
+		noutput++
+	}
+}
+
+END {
+	if (error)
+		exit 1
+
+	header()
+	signals()
+	uut()
+	initial()
+
+	for (i = 0; i < ninput; i++)
+		geninput(i)
+
+	footer()
+}
