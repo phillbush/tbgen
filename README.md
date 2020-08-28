@@ -22,12 +22,13 @@ tbgen is not a Verilog parser, it expects the module file to be well written.
 
 Variables can be set with the -v option, as in -v VARIABLE=VALUE.
 The following variables are supported by tbgen:
-tbname          Name of the testbench file to generate (default: testbench)
-vcdfile         Name of the vcd file (default: testbench.vcd)
-timescale       Time scale in ns (default: 1).
-duration        Duration of test in multiples of timescale (default: 100).
-step            Duration of each step in multiples of timescale (default: 1).
-module          Name of the module (default based on the input).
+
+* `tbname`:     Name of the testbench file to generate (default: testbench)
+* `vcdfile`:    Name of the vcd file (default: testbench.vcd)
+* `timescale`:  Time scale in ns (default: 1).
+* `duration`:   Duration of test in multiples of timescale (default: 100).
+* `step`:       Duration of each step in multiples of timescale (default: 1).
+* `module`:     Name of the module (default based on the input).
 
 For example:
 
@@ -60,10 +61,10 @@ steps.
 
 ## TODO
 
-• Consider the cases when the bus sizes are parameterized.
-• Improve parsing.
-• Add option to generate increasing/decreasing input values.
-• Add option to set input values to a constant.
+* Consider the cases when the bus sizes are parameterized.
+* Improve parsing.
+* Add option to generate increasing/decreasing input values.
+* Add option to set input values to a constant.
 
 ## License
 
