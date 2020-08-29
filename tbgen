@@ -33,8 +33,10 @@ function abs(n) {
 }
 
 function getsizelen(sizestring, len, a) {
-	len = split(sizestring, a, "[]:[]")
+	if (!sizestring)
+		return 1
 
+	len = split(sizestring, a, "[]:[]")
 	if (len == 3) {
 		return a[2]
 	} else if (len == 4) {
