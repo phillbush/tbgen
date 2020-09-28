@@ -19,7 +19,7 @@ BEGIN {
 		n = split(ARGV[i], a, ":")
 		if (n == 2) {
 			n = 3
-			ARGV[3] = "1"
+			a[3] = "1"
 		}
 		if (n != 3) {
 			print "tbgen: improper input: " ARGV[i] >"/dev/stderr"
