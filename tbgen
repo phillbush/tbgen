@@ -16,7 +16,12 @@ BEGIN {
 	nsteps = duration / step
 
 	for (i = 1; i < ARGC; i++) {
-		if (split(ARGV[i], a, ":") != 3) {
+		n = split(ARGV[i], a, ":")
+		if (n == 2) {
+			n = 3
+			ARGV[3] = "1"
+		}
+		if (n != 3) {
 			print "tbgen: improper input: " ARGV[i] >"/dev/stderr"
 			error = 1
 			exit 1
@@ -126,7 +131,7 @@ function initial() {
 	printf "\tinitial\n"
 	printf "\tbegin\n"
 	printf "\t\t$dumpfile(\"%s\");\n", vcdfile
-	printf "\t\t$dumpvars(0, %s);\n", tbname
+	printf "\t\t$dumpvars(1, %s);\n", tbname
 	printf "\t\t#%s $stop;\n", duration
 	printf "\tend\n"
 }
