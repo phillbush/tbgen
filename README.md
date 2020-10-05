@@ -36,16 +36,16 @@ For example:
 
 ## Values
 
-Rather than random values, the value of a input can be defined explicitly
+Rather than random values, the value of an input can be defined explicitly
 during tbgen invocation by calling ./tbgen with an argument of the form
 "INPUTNAME:VALUE".  For example, the following command sets the input
 "A" to the constant value of 4b'1010:
 
 	$ ./tbgen "A:4b'1010" <mymodule.v >testbench.v
 
-Instead of random values, the values of a input can increase or decrease
-over time.  Just invoke ./tbgen with the argument "INPUTNAME:i" for
-increasing values, or with "INPUTNAME:d" for decreasing values.  For
+Instead of random values, the values of an input can increase or
+decrease over time.  Just invoke ./tbgen with the argument "INPUTNAME:i"
+for increasing values, or with "INPUTNAME:d" for decreasing values.  For
 example, the following command makes the value of input "A" increase
 from 4'b0000 to 4'b1111 (and back again) over time:
 
