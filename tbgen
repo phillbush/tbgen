@@ -200,57 +200,89 @@ function footer() {
 	print "endmodule"
 }
 
+/\/\*/ {
+	comment = 1;
+}
+
+/\*\// {
+	comment = 0;
+}
+
 /^module/ {
-	if (module == "") {
-		split($0, a, "[ (]")
-		module = a[2]
+	if (!comment) {
+		if (module == "") {
+			split($0, a, "[ (]")
+			module = a[2]
+		}
 	}
 }
 
 /input/ {
-	sub(".*input +(wire|reg)? *", "", $0)   # remove keywords from $0
-	gsub("[,\(\);]", "", $0)                # remove separators from $0
+	if (!comment) {
+		sub(".*input +(wire|reg)? +(unsigned|signed)? *", "", $0)   # remove keywords from $0
+		gsub("[,\(\);]", " ", $0)               # remove separators from $0
+		gsub("]", "] ", $0)
 
-	n = split($0, a)
-	sizestring = " "
-	for (i = 1; i <= n; i++) {
-		if (match("\[[^:]*:?[^\]]*\]", a[i]))
-			sizestring = getsizestr(a[i++])
-		inputs[a[i]] = sprintf("%s", sizestring)
-		if (!inputvalue[a[i]])
-			inputvalue[a[i]] = "r"
-		if (!inputstep[a[i]])
-			inputstep[a[i]] = 1
+		n = split($0, a)
+		sizestring = " "
+		for (i = 1; i <= n; i++) {
+			if (match(a[i], "^[[].*")) {
+				while (!match(a[i], ".*[]]")) {
+					s = a[i++];
+					a[i] = s a[i];
+				}
+			}
+			if (match(a[i], "\[[^:]*:?[^\]]*\]"))
+				sizestring = getsizestr(a[i++])
+			inputs[a[i]] = sizestring
+			if (!inputvalue[a[i]])
+				inputvalue[a[i]] = "r"
+			if (!inputstep[a[i]])
+				inputstep[a[i]] = 1
+		}
 	}
 }
 
 /output/ {
-	sub(".*output +(wire|reg)? *", "", $0)  # remove keywords from $0
-	gsub("[,\(\);]", "", $0)                # remove separators from $0
+	if (!comment) {
+		sub(".*output +(wire|reg)? +(unsigned|signed)? *", "", $0)  # remove keywords from $0
+		gsub("[,\(\);]", "", $0)                # remove separators from $0
+		gsub("]", "] ", $0)
 
-	n = split($0, a)
-	sizestring = " "
-	for (i = 1; i <= n; i++) {
-		if (match("\[[^:]*:?[^\]]*\]", a[i]))
-			sizestring = getsizestr(a[i++])
-		outputs[a[i]] = sprintf("%s", sizestring)
+		n = split($0, a)
+		sizestring = " "
+		for (i = 1; i <= n; i++) {
+			if (match(a[i], "^[[].*")) {
+				while (!match(a[i], ".*[]]")) {
+					s = a[i++];
+					a[i] = s a[i];
+				}
+			}
+			if (match(a[i], "\[[^:]*:?[^\]]*\]"))
+				sizestring = getsizestr(a[i++])
+			outputs[a[i]] = sizestring
+		}
 	}
 }
 
 /parameter/ {
-	sub(".*parameter *", "", $0)
-	gsub("[,=;]", "", $0)
-	gsub("  *", " ", $0)
+	if (!comment) {
+		sub(".*parameter *", "", $0)
+		gsub("[,=;]", "", $0)
+		gsub("  *", " ", $0)
 
-	n = split($0, a)
-	for (i = 1; i <= n; i++) {
-		key = a[i]
-		parameters[key] = a[++i]
+		n = split($0, a)
+		for (i = 1; i <= n; i++) {
+			key = a[i]
+			parameters[key] = a[++i]
+		}
 	}
 }
 
 /endmodule/ {
-	exit
+	if (!comment) {
+		exit
+	}
 }
 
 END {
