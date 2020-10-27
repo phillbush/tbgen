@@ -1,7 +1,6 @@
 #!/usr/bin/awk -f
-# tbgen generate testbench from verilog module
-# geopt function in public domain from arnold@gnu.org
-# tbgen also is in public domain
+# tbgen: generate testbench from verilog module
+# tbgen is in public domain
 
 BEGIN {
 	# variables settable by -v
