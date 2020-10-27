@@ -200,12 +200,46 @@ function footer() {
 	print "endmodule"
 }
 
+function parameter(str) {
+	if (!comment) {
+		sub(".*parameter *", "", str)
+		gsub("[,=;]", "", str)
+		gsub("  *", " ", str)
+
+		n = split(str, a)
+		for (i = 1; i <= n; i++) {
+			key = a[i]
+			parameters[key] = a[++i]
+		}
+	}
+}
+
+{
+	gsub("/\\*.*\\*/", "")
+}
+
 /\/\*/ {
 	comment = 1;
 }
 
 /\*\// {
 	comment = 0;
+}
+
+/`include/ {
+	if (!comment) {
+		split($0, a)
+		file = a[2]
+		sub("^\"", "", file)
+		sub("\"$", "", file)
+		while (getline str <file == 1) {
+			gsub("/\\*.*\\*/", "", str)
+			if (match(str, "parameter")) {
+				parameter(str)
+			}
+		}
+		close(file)
+	}
 }
 
 /^module/ {
@@ -266,17 +300,7 @@ function footer() {
 }
 
 /parameter/ {
-	if (!comment) {
-		sub(".*parameter *", "", $0)
-		gsub("[,=;]", "", $0)
-		gsub("  *", " ", $0)
-
-		n = split($0, a)
-		for (i = 1; i <= n; i++) {
-			key = a[i]
-			parameters[key] = a[++i]
-		}
-	}
+	parameter($0)
 }
 
 /endmodule/ {
