@@ -228,8 +228,7 @@ function parameter(str) {
 
 /`include/ {
 	if (!comment) {
-		split($0, a)
-		file = a[2]
+		file = $2
 		sub("^\"", "", file)
 		sub("\"$", "", file)
 		while (getline str <file == 1) {
