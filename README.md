@@ -18,6 +18,17 @@ input to a random value, until the duration of the test is over.
 WARNING!
 tbgen is not a Verilog parser, it expects the module file to be well written.
 
+## Usage
+
+**tbgen** should be called as follows:
+The first group of arguments are `VARIABLE=VALUE` pairs preceded by `-v`.
+The second group of arguments are input specifications.
+The third kind argument is the filename to be read.
+All group of arguments are optional.
+If the filename is omitted, a module is read from standard input.
+
+	tbgen [-v VARIABLE=VALUE]... [INPUTSPEC]... [FILE]
+
 ## Variables
 
 Variables can be set with the -v option, as in -v VARIABLE=VALUE.
@@ -25,39 +36,52 @@ The following variables are supported by tbgen:
 
 * `tbname`:     Name of the testbench file to generate (default: testbench)
 * `vcdfile`:    Name of the vcd file (default: testbench.vcd)
+* `dumplevel`:  If set to 0, dump all variables in all lower level modules,
+  if set to 1, dump all variables in the top-level module (the testbench),
+  if set to 2, dump all variables in the top-level module and the modules instantiated by it (the dut),
+  etc.
 * `timescale`:  Time scale in ns (default: 1).
 * `duration`:   Duration of test in multiples of timescale (default: 100).
 * `step`:       Duration of each step in multiples of timescale (default: 1).
 * `module`:     Name of the module (default based on the input).
+* `clock`:      Name of the clock input (default to "clk").
+* `reset`:      Name of the reset input (default to "rst").
+* `incdir`:     Directory used to search for included files (tbgen only support one incdir)
 
 For example:
 
-	$ ./tbgen -v duration=100 -v step=1 <mymodule.v >testbench.v
+	$ ./tbgen -v duration=100 -v step=2 <mymodule.v >testbench.v
 
-## Values
+## Clock and reset
+
+The clock and the reset inputs are special inputs.
+The input for the clock is alternated from 1 to 0 and back again at each step.
+The input for the reset begins 1 and is set to 0 after the first step.
+
+## Input specification
 
 Rather than random values, the value of an input can be defined explicitly
 during tbgen invocation by calling ./tbgen with an argument of the form
-"INPUTNAME:VALUE".  For example, the following command sets the input
-"A" to the constant value of 4b'1010:
+`INPUTNAME:VALUE`.  For example, the following command sets the input
+`data` to the constant value of `4b'1010`:
 
-	$ ./tbgen "A:4b'1010" <mymodule.v >testbench.v
+	$ ./tbgen "data:4b'1010" mymodule.v >testbench.v
 
-Instead of random values, the values of an input can increase or
-decrease over time.  Just invoke ./tbgen with the argument "INPUTNAME:i"
-for increasing values, or with "INPUTNAME:d" for decreasing values.  For
-example, the following command makes the value of input "A" increase
-from 4'b0000 to 4'b1111 (and back again) over time:
+Also, the values of an input can increase or decrease over time.
+Just invoke ./tbgen with the argument `INPUTNAME:i` for increasing values,
+or with "INPUTNAME:d" for decreasing values.
+For example, the following command makes the value of input `data` increase
+from `4'b0000` to `4'b1111` (and back again) over time:
 
-	$ ./tbgen "A:i" <mymodule >testbench.v
+	$ ./tbgen "data:i" <mymodule >testbench.v
 
 Rather than changing value one step at a time you can set the value of
 an input to change at a given number of steps; just append the argument
 specifier with ":NSTEPS".  For example, the following command increases
-the value of A at each step, and increases the value of B at each 16
-steps.
+the value of `dataA` at each step, and increases the value of `dataB` at
+each 16 steps.
 
-	$ ./tbgen A:i:1 B:i:16 <mymodule >testbench.v
+	$ ./tbgen dataA:i:1 dataB:i:16 <mymodule >testbench.v
 
 ## License
 
