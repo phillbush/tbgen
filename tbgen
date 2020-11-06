@@ -6,15 +6,22 @@ BEGIN {
 	# variables settable by -v
 	if (!tbname)    tbname = "testbench"
 	if (!vcdfile)   vcdfile = "testbench.vcd"
+	if (!dumplevel) dumplevel = 1
 	if (!timescale) timescale = 1
 	if (!duration)  duration = 100
 	if (!step)      step = 1
 	if (!module)    module = ""
+	if (!clock)     clock = "clk"
+	if (!reset)     reset = "rst"
+	if (!incdir)    incdir = ""
 
 	# internal variables
 	nsteps = duration / step
+	useclock = 0
+	usereset = 0
+	initialpause = 0
 
-	for (i = 1; i < ARGC; i++) {
+	for (i = 1; ARGV[i] ~ /^[A-Za-z_][A-Za-z0-9_]*:/ ; i++) {
 		n = split(ARGV[i], a, ":")
 		if (n == 2) {
 			inputvalue[a[1]] = a[2]
@@ -23,8 +30,10 @@ BEGIN {
 			inputvalue[a[1]] = a[2]
 			inputstep[a[1]] = a[3]
 		}
+		ARGV[i] = ""
 	}
-	ARGC = 0
+	if (i >= ARGC)          # no file names so force stdin
+		ARGV[ARGC++] = "-"
 
 	srand()
 }
@@ -85,12 +94,12 @@ function randombits(n, i) {
 }
 
 function increasing(n, i) {
-	if (reset) {
+	if (resetcount) {
 		Incmax = 1
 		for (i = 0; i < n; i++)
 			Incmax *= 2
 		Incval = 0
-		reset = 0
+		resetcount = 0
 	}
 
 	printf "%s'h%x", n, Incval
@@ -98,12 +107,12 @@ function increasing(n, i) {
 }
 
 function decreasing(n, i) {
-	if (reset) {
+	if (resetcount) {
 		Incmax = 1
 		for (i = 0; i < n; i++)
 			Incmax *= 2
 		Incval = Incmax - 1
-		reset = 0
+		resetcount = 0
 	}
 
 	printf "%s'h%x", n, Incval
@@ -120,6 +129,10 @@ function header() {
 }
 
 function signals(i) {
+	if (usereset)
+		printf "\treg %s;\n", reset
+	if (useclock)
+		printf "\treg %s;\n", clock
 	for (i in inputs)
 		printf "\treg %s %s;\n", inputs[i], i
 	for (i in outputs)
@@ -136,6 +149,10 @@ function dut(i, a, n) {
 		a[n++] = i
 
 	printf "\t%s dut(", module
+	if (usereset)
+		printf ".%s(%s)%s", reset, reset, (useclock || i) ? ", " : ""
+	if (useclock)
+		printf ".%s(%s)%s", clock, clock, (i) ? ", " : ""
 	for (i = 0; i < n; i++)
 		printf ".%s(%s)%s", a[i], a[i], (i == n - 1) ? "" : ", "
 	printf ");\n\n"
@@ -145,13 +162,43 @@ function initial() {
 	printf "\tinitial\n"
 	printf "\tbegin\n"
 	printf "\t\t$dumpfile(\"%s\");\n", vcdfile
-	printf "\t\t$dumpvars(1, %s);\n", tbname
+	printf "\t\t$dumpvars(%d, %s);\n", dumplevel, tbname
 	printf "\t\t#%s $stop;\n", duration
 	printf "\tend\n"
 }
 
+function genreset() {
+	initialpause = 2
+
+	printf "\n"
+	printf "\t/* %s */\n", reset
+	printf "\tinitial\n"
+	printf "\tbegin\n"
+	printf "\t\t%s = 1'b1;\n", reset
+	printf "\t\t#2; %s = %s;\n", reset, "~" reset
+	printf "\tend\n"
+}
+
+function genclock(i) {
+	resetcount = 1
+
+	printf "\n"
+	printf "\t/* %s */\n", reset
+	printf "\tinitial\n"
+	printf "\tbegin\n"
+	for (i = 0; i < nsteps; i++) {
+		printf "\t\t"
+		if (i)
+			printf "#1; "
+		printf "%s = ", clock
+		decreasing(1)
+		printf ";\n"
+	}
+	printf "\tend\n"
+}
+
 function geninput(input, sizelen) {
-	reset = 1
+	resetcount = 1
 
 	split(input, a, ";")
 
@@ -162,28 +209,25 @@ function geninput(input, sizelen) {
 
 	sizelen = getsizelen(inputs[input])
 	if (inputvalue[input] == "r") {
-		for (i = 0; i < nsteps / inputstep[input]; i++) {
+		for (i = initialpause; i < nsteps / inputstep[input]; i++) {
 			printf "\t\t"
-			if (i)
-				printf "#%s; ", step * inputstep[input]
+			printf "#%s; ", step * inputstep[input]
 			printf "%s = ", input
 			randombits(sizelen)
 			printf ";\n"
 		}
 	} else if (inputvalue[input] == "i") {
-		for (i = 0; i < nsteps / inputstep[input]; i++) {
+		for (i = initialpause; i < nsteps / inputstep[input]; i++) {
 			printf "\t\t"
-			if (i)
-				printf "#%s; ", step * inputstep[input]
+			printf "#%s; ", step * inputstep[input]
 			printf "%s = ", input
 			increasing(sizelen)
 			printf ";\n"
 		}
 	} else if (inputvalue[input] == "d") {
-		for (i = 0; i < nsteps / inputstep[input]; i++) {
+		for (i = initialpause; i < nsteps / inputstep[input]; i++) {
 			printf "\t\t"
-			if (i)
-				printf "#%s; ", step * inputstep[input]
+			printf "#%s; ", step * inputstep[input]
 			printf "%s = ", input
 			decreasing(sizelen)
 			printf ";\n"
@@ -200,111 +244,142 @@ function footer() {
 }
 
 function parameter(str) {
-	if (!comment) {
-		sub(".*parameter *", "", str)
-		gsub("[,=;]", "", str)
-		gsub("  *", " ", str)
+	sub(".*parameter *", "", str)
+	gsub("[,=;]", "", str)
+	gsub("  *", " ", str)
 
-		n = split(str, a)
-		for (i = 1; i <= n; i++) {
-			key = a[i]
-			parameters[key] = a[++i]
-		}
+	n = split(str, a)
+	for (i = 1; i <= n; i++) {
+		key = a[i]
+		parameters[key] = a[++i]
 	}
 }
 
+function define(str) {
+	gsub("[ \t]+", " ", str)
+	n = split(str, a)
+	key = a[2]
+	for (i = 3; i <= n; i++) {
+		parameters[key] = parameters[key] a[i]
+	}
+}
+
+# remove single-line comments
 {
-	gsub("/\\*.*\\*/", "")
+	sub(/\/\/.*/, "")
+	sub(/\/\*.*\*\//, "")
 }
 
+# remove multi-line comments
 /\/\*/ {
-	comment = 1;
+	comment = 2
+	sub(/\/\*.*/, "")
 }
 
+# remove multi-line comments
 /\*\// {
-	comment = 0;
+	comment = 0
+	sub(/.*\*\//, "")
+}
+
+# remove multi-line comments
+comment {
+	if (comment == 1)
+		next
+	else
+		comment = 1
 }
 
 /`include/ {
-	if (!comment) {
-		file = $2
-		sub("^\"", "", file)
-		sub("\"$", "", file)
-		while (getline str <file == 1) {
-			gsub("/\\*.*\\*/", "", str)
-			if (match(str, "parameter")) {
-				parameter(str)
-			}
+	file = $2
+	sub("^\"", "", file)
+	sub("\"$", "", file)
+	success = getline <file
+	if (success == -1)
+		file = incdir "/" file
+	if (incdir)
+		success = getline <file
+	while (success == 1) {
+		gsub("/\\*.*\\*/", "", str)
+		if ($1 == "parameter") {
+			parameter($0)
+		} else if ($1 == "`define") {
+			define($0)
 		}
-		close(file)
+		success = getline <file
 	}
+	close(file)
+	next
 }
 
 /^module/ {
-	if (!comment) {
-		if (module == "") {
-			split($0, a, "[ (]")
-			module = a[2]
-		}
+	if (module == "") {
+		split($0, a, "[ (]")
+		module = a[2]
 	}
+	next
 }
 
 /input/ {
-	if (!comment) {
-		sub(".*input +(wire|reg)? +(unsigned|signed)? *", "", $0)   # remove keywords from $0
-		gsub("[,\(\);]", " ", $0)               # remove separators from $0
-		gsub("]", "] ", $0)
+	sub(".*input +(wire|reg)? +(unsigned|signed)? *", "", $0)   # remove keywords from $0
+	gsub("[,\(\);]", " ", $0)               # remove separators from $0
+	gsub("]", "] ", $0)
 
-		n = split($0, a)
-		sizestring = " "
-		for (i = 1; i <= n; i++) {
-			if (match(a[i], "^[[].*")) {
-				while (!match(a[i], ".*[]]")) {
-					s = a[i++];
-					a[i] = s a[i];
-				}
+	n = split($0, a)
+	sizestring = " "
+	for (i = 1; i <= n; i++) {
+		if (match(a[i], "^[[].*")) {
+			while (!match(a[i], ".*[]]")) {
+				s = a[i++];
+				a[i] = s a[i];
 			}
-			if (match(a[i], "\[[^:]*:?[^\]]*\]"))
-				sizestring = getsizestr(a[i++])
-			inputs[a[i]] = sizestring
-			if (!inputvalue[a[i]])
-				inputvalue[a[i]] = "r"
-			if (!inputstep[a[i]])
-				inputstep[a[i]] = 1
 		}
+		if (match(a[i], "\[[^:]*:?[^\]]*\]"))
+			sizestring = getsizestr(a[i++])
+		if (a[i] == clock) {
+			useclock = 1
+			break;
+		} else if (a[i] == reset) {
+			usereset = 1
+			break;
+		}
+		inputs[a[i]] = sizestring
+		if (!inputvalue[a[i]])
+			inputvalue[a[i]] = "r"
+		if (!inputstep[a[i]])
+			inputstep[a[i]] = 1
 	}
+	next
 }
 
 /output/ {
-	if (!comment) {
-		sub(".*output +(wire|reg)? +(unsigned|signed)? *", "", $0)  # remove keywords from $0
-		gsub("[,\(\);]", "", $0)                # remove separators from $0
-		gsub("]", "] ", $0)
+	sub(".*output +(wire|reg)? +(unsigned|signed)? *", "", $0)  # remove keywords from $0
+	gsub("[,\(\);]", "", $0)                # remove separators from $0
+	gsub("]", "] ", $0)
 
-		n = split($0, a)
-		sizestring = " "
-		for (i = 1; i <= n; i++) {
-			if (match(a[i], "^[[].*")) {
-				while (!match(a[i], ".*[]]")) {
-					s = a[i++];
-					a[i] = s a[i];
-				}
+	n = split($0, a)
+	sizestring = " "
+	for (i = 1; i <= n; i++) {
+		if (match(a[i], "^[[].*")) {
+			while (!match(a[i], ".*[]]")) {
+				s = a[i++];
+				a[i] = s a[i];
 			}
-			if (match(a[i], "\[[^:]*:?[^\]]*\]"))
-				sizestring = getsizestr(a[i++])
-			outputs[a[i]] = sizestring
 		}
+		if (match(a[i], "\[[^:]*:?[^\]]*\]"))
+			sizestring = getsizestr(a[i++])
+		outputs[a[i]] = sizestring
 	}
+	next
 }
 
 /parameter/ {
 	parameter($0)
+	next
 }
 
 /endmodule/ {
-	if (!comment) {
-		exit
-	}
+	exit
 }
 
 END {
@@ -315,6 +390,10 @@ END {
 	signals()
 	dut()
 	initial()
+	if (usereset)
+		genreset()
+	if (useclock)
+		genclock()
 	for (input in inputs)
 		geninput(input)
 	footer()
