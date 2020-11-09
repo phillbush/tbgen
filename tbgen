@@ -16,6 +16,7 @@ BEGIN {
 	if (!incdir)    incdir = ""
 
 	# internal variables
+	progname = ARGV[0]
 	nsteps = duration / step
 	useclock = 0
 	usereset = 0
@@ -36,6 +37,12 @@ BEGIN {
 		ARGV[ARGC++] = "-"
 
 	srand()
+}
+
+function err(str) {
+	printf "%s: %s\n", progname, str >"/dev/stderr"
+	error = 1
+	exit
 }
 
 function abs(n) {
@@ -63,9 +70,7 @@ function getsizestr(str, i, s, n, a, b) {
 		b = callbc(s[3])
 		return "[" a ":" b "]"
 	}
-	print "tbgen: could not compute size of signal bus: " sizestring >"/dev/stderr"
-	error = 1
-	exit 1
+	err("could not compute size of signal bus: " sizestring)
 }
 
 function getsizelen(sizestring, len, a) {
@@ -78,9 +83,7 @@ function getsizelen(sizestring, len, a) {
 	} else if (len == 4) {
 		return abs(a[2] - a[3] + 1)
 	}
-	print "tbgen: could not compute size of signal bus: " sizestring >"/dev/stderr"
-	error = 1
-	exit 1
+	err("could not compute size of signal bus: " sizestring)
 }
 
 function randombits(n, i) {
@@ -189,7 +192,7 @@ function genclock(i) {
 	for (i = 0; i < nsteps; i++) {
 		printf "\t\t"
 		if (i)
-			printf "#1; "
+			printf "#%d; ", step
 		printf "%s = ", clock
 		decreasing(1)
 		printf ";\n"
