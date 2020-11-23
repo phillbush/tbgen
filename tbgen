@@ -4,6 +4,7 @@
 
 BEGIN {
 	# variables settable by -v
+	if (!timeunit)  timeunit = "ns"
 	if (!tbname)    tbname = "testbench"
 	if (!vcdfile)   vcdfile = "testbench.vcd"
 	if (!dumplevel) dumplevel = 1
@@ -14,6 +15,7 @@ BEGIN {
 	if (!clock)     clock = "clk"
 	if (!reset)     reset = "rst"
 	if (!incdir)    incdir = ""
+	if (!dumphex)   dumphex = 1
 
 	# internal variables
 	progname = ARGV[0]
@@ -24,12 +26,18 @@ BEGIN {
 
 	for (i = 1; ARGV[i] ~ /^[A-Za-z_][A-Za-z0-9_]*:/ ; i++) {
 		n = split(ARGV[i], a, ":")
-		if (n == 2) {
+		if (a[1] == "dump") {
+			if (n != 3)
+				err("invalid argument: " ARGV[i])
+			dump[a[2]] = a[3]
+		} else if (n == 2) {
 			inputvalue[a[1]] = a[2]
 			inputstep[a[1]] = 1
 		} else if (n == 3) {
 			inputvalue[a[1]] = a[2]
 			inputstep[a[1]] = a[3]
+		} else {
+			err("invalid argument: " ARGV[i])
 		}
 		ARGV[i] = ""
 	}
@@ -126,7 +134,7 @@ function decreasing(n, i) {
 }
 
 function header() {
-	print "`timescale " timescale " ns / " timescale " ns"
+	printf "`timescale %s %s / %s %s", timescale, timeunit, timescale, timeunit
 	print ""
 	print "module " tbname "();"
 }
@@ -166,7 +174,10 @@ function initial() {
 	printf "\tbegin\n"
 	printf "\t\t$dumpfile(\"%s\");\n", vcdfile
 	printf "\t\t$dumpvars(%d, %s);\n", dumplevel, tbname
-	printf "\t\t#%s $stop;\n", duration
+	printf "\t\t#%s;\n", duration
+	for (reg in dump)
+		printf "\t\t$writemem%s(\"%s\", dut.%s);\n", (dumphex ? "h" : "b"), dump[reg], reg
+	printf "\t\t$finish;\n"
 	printf "\tend\n"
 }
 

@@ -27,7 +27,8 @@ The third kind argument is the filename to be read.
 All group of arguments are optional.
 If the filename is omitted, a module is read from standard input.
 
-	tbgen [-v VARIABLE=VALUE]... [INPUTSPEC]... [FILE]
+	tbgen [-v VARIABLE=VALUE]... [INPUTSPEC]... [MEMDUMP]... [FILE]
+
 
 ## Variables
 
@@ -39,8 +40,9 @@ The following variables are supported by tbgen:
 * `dumplevel`:  If set to 0, dump all variables in all lower level modules,
   if set to 1, dump all variables in the top-level module (the testbench),
   if set to 2, dump all variables in the top-level module and the modules instantiated by it (the dut),
-  etc.
-* `timescale`:  Time scale in ns (default: 1).
+  etc (default: 1).
+* `timeunit`:   Base unit of time (default: "ns").
+* `timescale`:  Time scale in the base unit of time (default: 1).
 * `duration`:   Duration of test in multiples of timescale (default: 100).
 * `step`:       Duration of each step in multiples of timescale (default: 1).
 * `module`:     Name of the module (default based on the input).
@@ -50,13 +52,8 @@ The following variables are supported by tbgen:
 
 For example:
 
-	$ ./tbgen -v duration=100 -v step=2 <mymodule.v >testbench.v
+	$ ./tbgen -v duration=100 -v step=2 mymodule.v >testbench.v
 
-## Clock and reset
-
-The clock and the reset inputs are special inputs.
-The input for the clock is alternated from 1 to 0 and back again at each step.
-The input for the reset begins 1 and is set to 0 after the first step.
 
 ## Input specification
 
@@ -73,7 +70,7 @@ or with "INPUTNAME:d" for decreasing values.
 For example, the following command makes the value of input `data` increase
 from `4'b0000` to `4'b1111` (and back again) over time:
 
-	$ ./tbgen "data:i" <mymodule >testbench.v
+	$ ./tbgen "data:i" mymodule.v >testbench.v
 
 Rather than changing value one step at a time you can set the value of
 an input to change at a given number of steps; just append the argument
@@ -81,7 +78,28 @@ specifier with ":NSTEPS".  For example, the following command increases
 the value of `dataA` at each step, and increases the value of `dataB` at
 each 16 steps.
 
-	$ ./tbgen dataA:i:1 dataB:i:16 <mymodule >testbench.v
+	$ ./tbgen dataA:i:1 dataB:i:16 mymodule.v >testbench.v
+
+The clock and the reset inputs are special inputs.
+The input for the clock is alternated from 1 to 0 and back again at each step.
+The input for the reset begins 1 and is set to 0 after the first step.
+Both clock and reset inputs do not need to be declared as input specification.
+
+
+## Memory dump
+
+The testbench can dump the content of a memory of a given module at the end of the simulation.
+To specify a memory to be dump, call ./tbgen with an argument of the form `dump:MEMORY:FILE`.
+For example, the following command dumps the content of the memory `data` in the module `ram`
+at the end of the simulation.
+
+	$ ./tbgen dump:ram.data:memdump.txt mymodule.v >textbench.v
+
+Note that the module `ram` is instanciated in the module under test `mymodule.v`.
+If the memory is declared directly in `mymodule.v`, use the following call instead:
+
+	$ ./tbgen dump:data:memdump.txt mymodule.v >textbench.v
+
 
 ## License
 
