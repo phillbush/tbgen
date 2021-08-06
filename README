@@ -1,0 +1,148 @@
+TBGEN(1)                    General Commands Manual                   TBGEN(1)
+
+
+
+NAME
+       tbgen - generate testbench from verilog module
+
+SYNOPSIS
+       tbgen [-c clock] [-d duration] [-f vcdfile] [-I include] [-l dumplevel]
+             [-m module] [-n tbname] [-r reset] [-s step] [-t timescale]
+             [inputspec ...]
+
+DESCRIPTION
+       tbgen is a testbench generator.  tbgen reads a verilog module, called
+       "device under test" (or DUT, for short) from its standard input and
+       generates a testbench for it on the standard output.
+
+       By default, tbgen sets random values for each input of the DUT.  The
+       value of an input can however be defined explicitly by calling tbgen
+       with an argument of the form "INPUTNAME:VALUE[:STEPS]".
+
+       INPUTNAME is the name of the input.  VALUE is its initial value (such
+       as "4b'1010"); it can also be the letter "i" for the input to be
+       incremented at each time step or "d" for the input to be decremented at
+       each time step.  An optional STEP is the number of steps after which
+       the input must be changed.  See the EXAMPLES section for examples.
+
+       The inputs "clk" and "rst" are special and are not set randomly by
+       default.  The input for "clk" is alternated from 1 to 0 and back again
+       at each step.  The input for "rst" begins 1 and is set to 0 after the
+       first step.  Both "clk" and "rst" inputs do not need to be declared as
+       arguments.  The name of those inputs can be changed with the -c and -r
+       options.
+
+       By default, tbgen does not dump memory.  A memory can be dump at the
+       end of the simulation by calling tbgen with an argument of the form
+       "dump:MEMORY:FILE".
+
+       MEMORY is the name of the memory prefixed with the module path
+       separated by periods.  FILE is the name of the file that will contain
+       the memory dump.  See the EXAMPLES section for illustration.
+
+       After the simulation, a "simulation.vcd" file describing the waveform
+       of the simulation will be created and can be checked with gtkwave(1).
+
+       The options are as follows:
+
+       -c clock
+              The name of the clock input (default: clk).
+
+       -d duration
+              The duration of the simulation in multiples of timescale
+              (default: 100).
+
+       -f vcdfile
+              Name of the vcd file to be created (default: simulation.vcd).
+
+       -I include
+              Directory used to search for included files.
+
+       -l dumplevel
+              If set to 0, dump all variables in all lower level modules.
+              If set to 1, dump all variables in the top-level module (the
+              testbench).  If set to 2, dump all variables in the top-level
+              module and the modules instantiated by it.  If set to 3, dump
+              all variables in the top-level module, the modules instantiated
+              by it, and the modules instantiated by the modules instantiated
+              by it.  And so on. (default: 1).
+
+       -m module
+              Name of the module (default based on the input).
+
+       -n tbname
+              Name of the testbench file to generate (default: testbench).
+
+       -r reset
+              The name of the reset input (default: rst).
+
+       -s step
+              Duration of each step in multiples of timescale (default: 1).
+
+       -t timescale
+              Time scale and time unit.  (default 1ns)
+
+EXAMPLES
+       After generating the testbench with tbgen, compile it and the module of
+       the device under test with iverilog(1) to generate the vvp file; then
+       run the compiled vvp file with vvp(1) to generate the vcd file; then
+       run gtkwave(1) with the generated vcd to get the waveform:
+
+              $ tbgen <mymodule.v >testbench.v
+              $ iverilog -o testbench.vvp testbench.v mymodule.v
+              $ vvp testbench.vvp
+              $ gtkwave simulation.vcd
+
+       The generated testbench works by, at each simulation step, setting each
+       input to a random value, until the duration of the test is over.
+
+       Rather than random values, the value of an input can be defined
+       explicitly during tbgen invocation by calling it with an argument of
+       the form "INPUTNAME:VALUE".  For example, the following command sets
+       the input "data" to the constant value of "4b'1010":
+
+              $ tbgen "data:4b'1010" <mymodule.v >testbench.v
+
+       Rather than a constant value, the values of an input can increase or
+       decrease over time.  Just invoke tbgen with the argument "INPUTNAME:i"
+       for increasing values, or with "INPUTNAME:d" for decreasing values.
+       For example, the following command makes the value of the input "data"
+       increase from "4'b0000" to "4'b1111" and back again over time:
+
+              $ tbgen data:i <mymodule.v >testbench.v
+
+       Rather than changing value one step at a time you can set the value of
+       an input to change at a given number of steps; just append the argument
+       with ":NSTEPS".  For example, the following command increases the value
+       of "dataA" at each step, and increases the value of "dataB" at each 16
+       steps:
+
+              $ tbgen dataA:i:1 "dataB:i:16 <mymodule.v >testbench.v
+
+       Note that the clock and reset inputs (set with -c and -r) are special
+       inputs, and are not set randomly.
+
+       The testbench can dump the content of a memory of a given module at the
+       end of the simulation.  To specify a memory to be dump, call tbgen with
+       an argument of the form "dump:MEMORY:FILE".  For example, the following
+       command dumps the contents of the memory "data" in the module "ram" at
+       the end of the simulation to the file "memdump.txt":
+
+              $ tbgen dump:ram.data:memdump.txt <mymodule.v >testbench.v
+
+       Note that the module "ram" is instanciated in the DUT "mymodule.v".  if
+       the memory is declared directly in "mymodule.v", there is no need to
+       prefix the memory name with a module path.
+
+              $ tbgen dump:data:memdump.txt <mymodule.v >testbench.v
+
+SEE ALSO
+       gtkwave(1), iverilog(1)
+
+BUGS
+       tbgen(1) is not a Verilog parser, it expects the module file to be well
+       written.
+
+
+
+                                                                      TBGEN(1)

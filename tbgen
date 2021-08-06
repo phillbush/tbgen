@@ -1,12 +1,62 @@
-#!/usr/bin/awk -f
+#!/bin/sh
 # tbgen: generate testbench from verilog module
 # tbgen is in public domain
 
+while getopts 'c:d:f:I:l:m:n:r:s:t:' c
+do
+	case "$c" in
+	c)
+		clock="$OPTARG"
+		;;
+	d)
+		duration="$OPTARG"
+		;;
+	f)
+		vcdfile="$OPTARG"
+		;;
+	I)
+		incdir="$incdir:$OPTARG"
+		;;
+	l)
+		dumplevel="$OPTARG"
+		;;
+	m)
+		module="$OPTARG"
+		;;
+	n)
+		tbname="$OPTARG"
+		;;
+	r)
+		reset="$OPTARG"
+		;;
+	s)
+		step="$OPTARG"
+		;;
+	t)
+		timescale="${OPTARG%%[!0-9]*}"
+		timeunit="${OPTARG##*[0-9]}"
+		;;
+	esac
+done
+shift $(( OPTIND - 1 ))
+
+awk -v tbname="$tbname" \
+    -v vcdfile="$vcdfile" \
+    -v dumplevel="$dumplevel" \
+    -v timeunit="$timeunit" \
+    -v timescale="$timescale" \
+    -v duration="$duration" \
+    -v step="$step" \
+    -v module="$module" \
+    -v clock="$clock" \
+    -v reset="$reset" \
+    -v incdir="$incdir" \
+'
 BEGIN {
 	# variables settable by -v
 	if (!timeunit)  timeunit = "ns"
 	if (!tbname)    tbname = "testbench"
-	if (!vcdfile)   vcdfile = "testbench.vcd"
+	if (!vcdfile)   vcdfile = "simulation.vcd"
 	if (!dumplevel) dumplevel = 1
 	if (!timescale) timescale = 1
 	if (!duration)  duration = 100
@@ -14,7 +64,7 @@ BEGIN {
 	if (!module)    module = ""
 	if (!clock)     clock = "clk"
 	if (!reset)     reset = "rst"
-	if (!incdir)    incdir = ""
+	if (!incdir)    incdir = ":"
 	if (!dumphex)   dumphex = 1
 
 	# internal variables
@@ -95,7 +145,7 @@ function getsizelen(sizestring, len, a) {
 }
 
 function randombits(n, i) {
-	printf "%s'b", n
+	printf "%s'"'"'b", n
 	for (i = 0; i < n; i++) {
 		if (rand() < 0.5)
 			printf "0"
@@ -113,7 +163,7 @@ function increasing(n, i) {
 		resetcount = 0
 	}
 
-	printf "%s'h%x", n, Incval
+	printf "%s'"'"'h%x", n, Incval
 	Incval = (Incval + 1) % Incmax
 }
 
@@ -126,7 +176,7 @@ function decreasing(n, i) {
 		resetcount = 0
 	}
 
-	printf "%s'h%x", n, Incval
+	printf "%s'"'"'h%x", n, Incval
 	if (!Incval)
 		Incval = Incmax - 1
 	else
@@ -188,7 +238,7 @@ function genreset() {
 	printf "\t/* %s */\n", reset
 	printf "\tinitial\n"
 	printf "\tbegin\n"
-	printf "\t\t%s = 1'b1;\n", reset
+	printf "\t\t%s = 1'"'"'b1;\n", reset
 	printf "\t\t#2; %s = %s;\n", reset, "~" reset
 	printf "\tend\n"
 }
@@ -225,7 +275,8 @@ function geninput(input, sizelen) {
 	if (inputvalue[input] == "r") {
 		for (i = initialpause; i < nsteps / inputstep[input]; i++) {
 			printf "\t\t"
-			printf "#%s; ", step * inputstep[input]
+			if (i > initialpause)
+				printf "#%s; ", step * inputstep[input]
 			printf "%s = ", input
 			randombits(sizelen)
 			printf ";\n"
@@ -233,7 +284,8 @@ function geninput(input, sizelen) {
 	} else if (inputvalue[input] == "i") {
 		for (i = initialpause; i < nsteps / inputstep[input]; i++) {
 			printf "\t\t"
-			printf "#%s; ", step * inputstep[input]
+			if (i > initialpause)
+				printf "#%s; ", step * inputstep[input]
 			printf "%s = ", input
 			increasing(sizelen)
 			printf ";\n"
@@ -241,7 +293,8 @@ function geninput(input, sizelen) {
 	} else if (inputvalue[input] == "d") {
 		for (i = initialpause; i < nsteps / inputstep[input]; i++) {
 			printf "\t\t"
-			printf "#%s; ", step * inputstep[input]
+			if (i > initialpause)
+				printf "#%s; ", step * inputstep[input]
 			printf "%s = ", input
 			decreasing(sizelen)
 			printf ";\n"
@@ -308,11 +361,10 @@ comment {
 	file = $2
 	sub("^\"", "", file)
 	sub("\"$", "", file)
-	success = getline <file
-	if (success == -1)
-		file = incdir "/" file
-	if (incdir)
-		success = getline <file
+	n = split(incdir, a, /:/)
+	for (i = 1; i <= n; i++)
+		if (((success = getline) <file) == 1)
+			break
 	while (success == 1) {
 		gsub("/\\*.*\\*/", "", str)
 		if ($1 == "parameter") {
@@ -412,3 +464,4 @@ END {
 		geninput(input)
 	footer()
 }
+' "$@"
