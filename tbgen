@@ -325,7 +325,7 @@ function parameter(str) {
 function define(str) {
 	gsub("[ \t]+", " ", str)
 	n = split(str, a)
-	key = a[2]
+	key = "`" a[2]
 	for (i = 3; i <= n; i++) {
 		parameters[key] = parameters[key] a[i]
 	}
@@ -375,6 +375,12 @@ comment {
 		success = getline <file
 	}
 	close(file)
+	next
+}
+
+$1 == "`define" {
+	gsub("/\\*.*\\*/", "", str)
+	define($0)
 	next
 }
 
