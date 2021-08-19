@@ -1,29 +1,29 @@
 TBGEN(1)                    General Commands Manual                   TBGEN(1)
 
-
-
 NAME
        tbgen - generate testbench from verilog module
 
 SYNOPSIS
        tbgen [-c clock] [-d duration] [-f vcdfile] [-I include] [-l dumplevel]
-             [-m module] [-n tbname] [-r reset] [-s step] [-t timescale]
-             [inputspec ...]
+       [-m module] [-n tbname] [-r reset] [-s step] [-t timescale]
+       [inputspec...]
 
 DESCRIPTION
        tbgen is a testbench generator.  tbgen reads a verilog module, called
-       "device under test" (or DUT, for short) from its standard input and
+       “device under test” (or DUT, for short) from its standard input and
        generates a testbench for it on the standard output.
 
        By default, tbgen sets random values for each input of the DUT.  The
        value of an input can however be defined explicitly by calling tbgen
-       with an argument of the form "INPUTNAME:VALUE[:STEPS]".
+       with an argument of the form "INPUTNAME:VALUES[:STEPS]".
 
-       INPUTNAME is the name of the input.  VALUE is its initial value (such
-       as "4b'1010"); it can also be the letter "i" for the input to be
+       INPUTNAME is the name of the input.  VALUES is the input's initial
+       value (such as "4b'1010"); several inputs can be separated with a
+       comma; the input can also be the letter "i" for the input to be
        incremented at each time step or "d" for the input to be decremented at
        each time step.  An optional STEP is the number of steps after which
-       the input must be changed.  See the EXAMPLES section for examples.
+       the input must be changed.  See the EXAMPLES section below for
+       examples.
 
        The inputs "clk" and "rst" are special and are not set randomly by
        default.  The input for "clk" is alternated from 1 to 0 and back again
@@ -38,7 +38,7 @@ DESCRIPTION
 
        MEMORY is the name of the memory prefixed with the module path
        separated by periods.  FILE is the name of the file that will contain
-       the memory dump.  See the EXAMPLES section for illustration.
+       the memory dump.  See the EXAMPLES section below for illustration.
 
        After the simulation, a "simulation.vcd" file describing the waveform
        of the simulation will be created and can be checked with gtkwave(1).
@@ -46,11 +46,11 @@ DESCRIPTION
        The options are as follows:
 
        -c clock
-              The name of the clock input (default: clk).
+              Name of the clock input (default: clk).
 
        -d duration
-              The duration of the simulation in multiples of timescale
-              (default: 100).
+              Duration of the simulation in multiples of timescale (default:
+              100).
 
        -f vcdfile
               Name of the vcd file to be created (default: simulation.vcd).
@@ -59,28 +59,28 @@ DESCRIPTION
               Directory used to search for included files.
 
        -l dumplevel
-              If set to 0, dump all variables in all lower level modules.
-              If set to 1, dump all variables in the top-level module (the
-              testbench).  If set to 2, dump all variables in the top-level
-              module and the modules instantiated by it.  If set to 3, dump
-              all variables in the top-level module, the modules instantiated
-              by it, and the modules instantiated by the modules instantiated
-              by it.  And so on. (default: 1).
+              If set to 0, dump all variables in all level modules.  If set to
+              1, dump all variables in the top-level module (the testbench).
+              If set to 2, dump all variables in the top-level module and the
+              modules instantiated by it.  If set to 3, dump all variables in
+              the top-level modudule, the modules instantiated by it, and the
+              modules instantiated by the modules instantiated by it.  And so
+              on.  (default: 1).
 
        -m module
               Name of the module (default based on the input).
 
        -n tbname
-              Name of the testbench file to generate (default: testbench).
+              Name of the testbench module to generate (default: testbench).
 
        -r reset
-              The name of the reset input (default: rst).
+              Name of the reset input (default: rst).
 
        -s step
               Duration of each step in multiples of timescale (default: 1).
 
        -t timescale
-              Time scale and time unit.  (default 1ns)
+              Time scale and time unit (default: 1ns).
 
 EXAMPLES
        After generating the testbench with tbgen, compile it and the module of
@@ -142,7 +142,5 @@ SEE ALSO
 BUGS
        tbgen(1) is not a Verilog parser, it expects the module file to be well
        written.
-
-
 
                                                                       TBGEN(1)

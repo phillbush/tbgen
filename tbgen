@@ -81,10 +81,16 @@ BEGIN {
 				err("invalid argument: " ARGV[i])
 			dump[a[2]] = a[3]
 		} else if (n == 2) {
-			inputvalue[a[1]] = a[2]
+			m = split(a[2], b, /,/)
+			inputsize[a[1]] = m
+			for (j = 1; j <= m; j++)
+				inputvalue[a[1], j] = tonum(b[j])
 			inputstep[a[1]] = 1
 		} else if (n == 3) {
-			inputvalue[a[1]] = a[2]
+			m = split(a[2], b, /,/)
+			inputsize[a[1]] = m
+			for (j = 1; j <= m; j++)
+				inputvalue[a[1], j] = tonum(b[j])
 			inputstep[a[1]] = a[3]
 		} else {
 			err("invalid argument: " ARGV[i])
@@ -95,6 +101,48 @@ BEGIN {
 		ARGV[ARGC++] = "-"
 
 	srand()
+}
+
+function tonum(n) {
+	if (n ~ /h/)
+		return htod(n)
+	if (n ~ /b/)
+		return btod(n)
+	return n
+}
+
+function btod(b,    n, l, i, d) {
+	l = length(b)
+	for (i = 1; i <= l; i++) {
+		d *= 2
+		n = substr(b, i, 1)
+		if (n == "1")
+			d++
+	}
+	return d
+}
+
+function htod(h,    n, l, i, d) {
+	l = length(h)
+	for (i = 1; i <= l; i++) {
+		d *= 16
+		n = substr(h, i, 1)
+		if (n ~ /[0-9]/)
+			d += n
+		else if (n == "a" || n == "A")
+			d += 10
+		else if (n == "b" || n == "B")
+			d += 11
+		else if (n == "c" || n == "C")
+			d += 12
+		else if (n == "d" || n == "D")
+			d += 13
+		else if (n == "e" || n == "E")
+			d += 14
+		else if (n == "f" || n == "F")
+			d += 15
+	}
+	return d
 }
 
 function err(str) {
@@ -144,43 +192,22 @@ function getsizelen(sizestring, len, a) {
 	err("could not compute size of signal bus: " sizestring)
 }
 
-function randombits(n, i) {
-	printf "%s'"'"'b", n
-	for (i = 0; i < n; i++) {
-		if (rand() < 0.5)
-			printf "0"
-		else
-			printf "1"
-	}
+function randombits(n) {
+	return int((n + 1) * rand())
 }
 
-function increasing(n, i) {
-	if (resetcount) {
-		Incmax = 1
-		for (i = 0; i < n; i++)
-			Incmax *= 2
-		Incval = 0
-		resetcount = 0
-	}
-
-	printf "%s'"'"'h%x", n, Incval
-	Incval = (Incval + 1) % Incmax
+function increasing(v, n,    i, max) {
+	max = 1
+	for (i = 0; i < n; i++)
+		max *= 2
+	return (v + 1) % max
 }
 
-function decreasing(n, i) {
-	if (resetcount) {
-		Incmax = 1
-		for (i = 0; i < n; i++)
-			Incmax *= 2
-		Incval = Incmax - 1
-		resetcount = 0
-	}
-
-	printf "%s'"'"'h%x", n, Incval
-	if (!Incval)
-		Incval = Incmax - 1
-	else
-		Incval = (Incval - 1) % Incmax
+function decreasing(v, n,    i, max) {
+	max = 1
+	for (i = 0; i < n; i++)
+		max *= 2
+	return (v - 1) % max
 }
 
 function header() {
@@ -243,9 +270,8 @@ function genreset() {
 	printf "\tend\n"
 }
 
-function genclock(i) {
-	resetcount = 1
-
+function genclock(    i, n) {
+	n = 1
 	printf "\n"
 	printf "\t/* %s */\n", reset
 	printf "\tinitial\n"
@@ -255,15 +281,14 @@ function genclock(i) {
 		if (i)
 			printf "#%d; ", step
 		printf "%s = ", clock
-		decreasing(1)
+		printf "1'"'"'b%x;\n", n
+		n = !n
 		printf ";\n"
 	}
 	printf "\tend\n"
 }
 
-function geninput(input, sizelen) {
-	resetcount = 1
-
+function geninput(input, sizelen, prevval, val) {
 	split(input, a, ";")
 
 	printf "\n"
@@ -272,37 +297,27 @@ function geninput(input, sizelen) {
 	printf "\tbegin\n"
 
 	sizelen = getsizelen(inputs[input])
-	if (inputvalue[input] == "r") {
-		for (i = initialpause; i < nsteps / inputstep[input]; i++) {
-			printf "\t\t"
-			if (i > initialpause)
-				printf "#%s; ", step * inputstep[input]
-			printf "%s = ", input
-			randombits(sizelen)
-			printf ";\n"
+	j = 1
+	prevval = 0
+	for (i = initialpause; i < nsteps / inputstep[input]; i++) {
+		printf "\t\t"
+		if (i > initialpause)
+			printf "#%s; ", step * inputstep[input]
+		printf "%s = ", input
+		if (inputvalue[input, j] == "r")
+			val = randombits(sizelen)
+		else if (inputvalue[input, j] == "i")
+			val = increasing(prevval, sizelen)
+		else if (inputvalue[input, j] == "d")
+			val = decreasing(prevval, sizelen)
+		else
+			val = inputvalue[input, j]
+		prevval = val
+		printf "%s'"'"'h%x;\n", sizelen, val
+		if (j < inputsize[input]) {
+			j++
 		}
-	} else if (inputvalue[input] == "i") {
-		for (i = initialpause; i < nsteps / inputstep[input]; i++) {
-			printf "\t\t"
-			if (i > initialpause)
-				printf "#%s; ", step * inputstep[input]
-			printf "%s = ", input
-			increasing(sizelen)
-			printf ";\n"
-		}
-	} else if (inputvalue[input] == "d") {
-		for (i = initialpause; i < nsteps / inputstep[input]; i++) {
-			printf "\t\t"
-			if (i > initialpause)
-				printf "#%s; ", step * inputstep[input]
-			printf "%s = ", input
-			decreasing(sizelen)
-			printf ";\n"
-		}
-	} else {
-		printf "\t\t%s = %s;\n", input, inputvalue[input]
 	}
-
 	printf "\tend\n"
 }
 
@@ -394,53 +409,55 @@ $1 == "`define" {
 
 /input/ {
 	sub(".*input +(wire|reg)? +(unsigned|signed)? *", "", $0)   # remove keywords from $0
-	gsub("[,\(\);]", " ", $0)               # remove separators from $0
-	gsub("]", "] ", $0)
+	gsub(/[,\(\);]/, " ", $0)               # remove separators from $0
+	gsub(/]/, "] ", $0)
 
-	n = split($0, a)
+	$0 = $0
 	sizestring = " "
-	for (i = 1; i <= n; i++) {
-		if (match(a[i], "^[[].*")) {
-			while (!match(a[i], ".*[]]")) {
-				s = a[i++];
-				a[i] = s a[i];
+	for (i = 1; i <= NF; i++) {
+		if (match($i, "^[[].*")) {
+			while (!match($i, ".*[]]")) {
+				s = $(i++);
+				$i = s $i;
 			}
 		}
-		if (match(a[i], "\[[^:]*:?[^\]]*\]"))
-			sizestring = getsizestr(a[i++])
-		if (a[i] == clock) {
+		if (match($i, "\[[^:]*:?[^\]]*\]"))
+			sizestring = getsizestr($(i++))
+		if ($i == clock) {
 			useclock = 1
 			break;
-		} else if (a[i] == reset) {
+		} else if ($i == reset) {
 			usereset = 1
 			break;
 		}
-		inputs[a[i]] = sizestring
-		if (!inputvalue[a[i]])
-			inputvalue[a[i]] = "r"
-		if (!inputstep[a[i]])
-			inputstep[a[i]] = 1
+		inputs[$i] = sizestring
+		if (!inputvalue[$i, 1]) {
+			inputvalue[$i, 1] = "r"
+			inputsize[$i] = 1
+		}
+		if (!inputstep[$i])
+			inputstep[$i] = 1
 	}
 	next
 }
 
 /output/ {
 	sub(".*output +(wire|reg)? +(unsigned|signed)? *", "", $0)  # remove keywords from $0
-	gsub("[,\(\);]", "", $0)                # remove separators from $0
-	gsub("]", "] ", $0)
+	gsub(/[,\(\);]/, "", $0)                # remove separators from $0
+	gsub(/]/, "] ", $0)
 
-	n = split($0, a)
+	$0 = $0
 	sizestring = " "
-	for (i = 1; i <= n; i++) {
-		if (match(a[i], "^[[].*")) {
-			while (!match(a[i], ".*[]]")) {
-				s = a[i++];
-				a[i] = s a[i];
+	for (i = 1; i <= NF; i++) {
+		if (match($i, "^[[].*")) {
+			while (!match($i, ".*[]]")) {
+				s = $(i++);
+				$i = s $i;
 			}
 		}
-		if (match(a[i], "\[[^:]*:?[^\]]*\]"))
-			sizestring = getsizestr(a[i++])
-		outputs[a[i]] = sizestring
+		if (match($i, "\[[^:]*:?[^\]]*\]"))
+			sizestring = getsizestr($(i++))
+		outputs[$i] = sizestring
 	}
 	next
 }
